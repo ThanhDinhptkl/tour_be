@@ -1,0 +1,178 @@
+version: '3.8'
+
+services:
+  discovery-server:
+    build:
+      context: ./discovery-server
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+    networks:
+      - microservices-network
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://discovery-server:8761/eureka/
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  tour-service:
+    build:
+      context: ./TourService
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      tour-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:mysql://tour-db:3306/tour_db?createDatabaseIfNotExist=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SERVER_PORT=8081
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  booking-service:
+    build:
+      context: ./BookingService
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      booking-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:mysql://booking-db:3306/booking_db?createDatabaseIfNotExist=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SERVER_PORT=8082
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  customer-service:
+    build:
+      context: ./CustomerService
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    env_file:
+      - ./CustomerService/.env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      customer-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  tour-db:
+    image: mysql:8.0
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=tour_db
+    volumes:
+      - tour-mysql-data:/var/lib/mysql
+    networks:
+      - microservices-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  booking-db:
+    image: mysql:8.0
+    ports:
+      - "3308:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=booking_db
+    volumes:
+      - booking-mysql-data:/var/lib/mysql
+    networks:
+      - microservices-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  customer-db:
+    image: mysql:8.0
+    ports:
+      - "3309:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=customer_db
+    volumes:
+      - customer-mysql-data:/var/lib/mysql
+    networks:
+      - microservices-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  microservices-network:
+    driver: bridge
+
+volumes:
+  tour-mysql-data:
+  booking-mysql-data:
+  customer-mysql-data:

@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/tour
+    depends_on:
+      - db
+    networks:
+      - customer-network
+    restart: on-failure:3
+
+  db:
+    image: mariadb:10.6
+    env_file:
+      - .env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - MYSQL_DATABASE=tour
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - customer-network
+    healthcheck:
+      test: mysqladmin ping -h localhost -u root -p${SPRING_DATASOURCE_PASSWORD}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+networks:
+  customer-network:
+    driver: bridge
+
+volumes:
+  mariadb_data: 
